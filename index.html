@@ -1,0 +1,174 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
+<title>Axioma</title>
+<meta name="description" content="Reproductor de música local para el teléfono. Funciona sin conexión y tu música nunca sale del dispositivo.">
+<meta name="theme-color" content="#14142a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Axioma">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/favicon-64.png" sizes="64x64">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div class="app">
+  <header class="topbar">
+    <button class="iconbtn" id="back" hidden aria-label="Volver" data-icon="back"></button>
+    <div class="wordmark"><b>AXIOMA</b><span class="plate" id="crumb">Biblioteca</span></div>
+    <div id="top-actions" style="display:flex;gap:3px;flex:none">
+      <button class="iconbtn" id="shuffle-all" aria-label="Reproducir todo en aleatorio" data-icon="shuffle"></button>
+      <button class="iconbtn" id="import" aria-label="Importar música" data-icon="eject"></button>
+    </div>
+  </header>
+
+  <nav class="seg" id="seg" role="tablist" aria-label="Vista de la biblioteca">
+    <button role="tab" data-lib="canciones" aria-selected="true">Canciones</button>
+    <button role="tab" data-lib="albumes" aria-selected="false">Álbumes</button>
+    <button role="tab" data-lib="artistas" aria-selected="false">Artistas</button>
+  </nav>
+
+  <div class="searchbar" id="searchbar" hidden>
+    <div class="searchbar__in">
+      <span data-icon="search" style="display:flex"></span>
+      <input id="q" type="search" placeholder="Buscar..." autocomplete="off" autocorrect="off" spellcheck="false" aria-label="Buscar en la biblioteca">
+    </div>
+  </div>
+
+  <main class="scroll" id="scroll">
+    <section class="view" data-view="biblioteca"></section>
+    <section class="view" data-view="buscar"></section>
+    <section class="view" data-view="listas"></section>
+    <section class="view" data-view="ajustes"></section>
+    <section class="view" data-view="detalle"></section>
+  </main>
+
+  <!-- Reproductor compacto, al estilo del modo persiana -->
+  <div class="deckbar" id="mini" hidden>
+    <div class="lcd" id="lcd-strip" role="button" tabindex="0" aria-label="Abrir el reproductor">
+      <span class="lcd__state" id="mini-state" data-icon="play"></span>
+      <span class="lcd__time" id="mini-time">00:00</span>
+      <canvas class="lcd__vis" id="vis-mini" aria-hidden="true"></canvas>
+      <span class="lcd__marq" id="mini-marq"><span id="mini-t"></span></span>
+    </div>
+    <div class="deckbar__row">
+      <button class="tbtn" id="mini-prev" aria-label="Anterior" data-icon="prev"></button>
+      <button class="tbtn tbtn--play" id="mini-btn" aria-label="Reproducir" data-icon="play"></button>
+      <button class="tbtn" id="mini-next" aria-label="Siguiente" data-icon="next"></button>
+      <div class="seek" id="mini-seek" role="slider" tabindex="0" aria-label="Posición de la pista" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+        <div class="seek__rail"></div>
+        <div class="seek__fill" id="mini-fill"></div>
+        <div class="seek__knob" id="mini-knob"></div>
+      </div>
+    </div>
+  </div>
+
+  <nav class="tabbar" role="tablist" aria-label="Secciones">
+    <button class="tab" data-tab="biblioteca" role="tab" aria-selected="true">
+      <span class="tab__i" data-icon="note"></span><span class="tab__l">Biblio</span></button>
+    <button class="tab" data-tab="buscar" role="tab" aria-selected="false">
+      <span class="tab__i" data-icon="search"></span><span class="tab__l">Buscar</span></button>
+    <button class="tab" data-tab="listas" role="tab" aria-selected="false">
+      <span class="tab__i" data-icon="stack"></span><span class="tab__l">Listas</span></button>
+    <button class="tab" data-tab="ajustes" role="tab" aria-selected="false">
+      <span class="tab__i" data-icon="sliders"></span><span class="tab__l">Opciones</span></button>
+  </nav>
+</div>
+
+<!-- Ventana de reproducción -->
+<section class="np" id="np" aria-label="Reproduciendo">
+  <div class="bar np__bar">
+    <button class="bar__btn" id="np-down" aria-label="Cerrar" data-icon="down"></button>
+    <span class="bar__grip"></span>
+    <span class="bar__name" id="np-crumb">Axioma</span>
+    <span class="bar__grip"></span>
+    <button class="bar__btn" id="np-more" aria-label="Más opciones" data-icon="more"></button>
+  </div>
+
+  <div class="np__body">
+    <div class="np__cover"><img id="np-art" src="" alt=""></div>
+
+    <div class="screen">
+      <div class="screen__top">
+        <span class="screen__state" id="np-state" data-icon="play"></span>
+        <span class="screen__time" id="np-time">00:00</span>
+        <span class="screen__vis">
+          <canvas id="vis-np" aria-hidden="true"></canvas>
+          <button class="screen__visoff" id="vis-off">Vis off</button>
+        </span>
+      </div>
+      <div class="screen__marq" id="np-marq"><span id="np-t"></span></div>
+      <div class="screen__meta">
+        <span><b id="np-kbps">--</b> kbps</span>
+        <span><b id="np-khz">--</b> kHz</span>
+        <span id="np-ch">stereo</span>
+        <span id="np-fmt" style="margin-left:auto"></span>
+      </div>
+    </div>
+
+    <div class="pane">
+      <div class="pane__body">
+        <div class="seek np__seek" id="np-seek" role="slider" tabindex="0" aria-label="Posición de la pista" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div class="seek__rail"></div>
+          <div class="seek__fill" id="fill"></div>
+          <div class="seek__knob" id="knob"></div>
+        </div>
+        <div class="np__times"><span id="elapsed">0:00</span><span id="remain">-0:00</span></div>
+      </div>
+
+      <div class="np__transport">
+        <button class="tbtn" id="prev" aria-label="Anterior" data-icon="prev"></button>
+        <button class="tbtn tbtn--play" id="play" aria-label="Reproducir" data-icon="play"></button>
+        <button class="tbtn" id="pause" aria-label="Pausar" data-icon="pause"></button>
+        <button class="tbtn" id="stop" aria-label="Detener" data-icon="stop"></button>
+        <button class="tbtn" id="next" aria-label="Siguiente" data-icon="next"></button>
+        <button class="tbtn" id="eject" aria-label="Importar música" data-icon="eject"></button>
+      </div>
+
+      <div class="np__tools">
+        <button class="tbtn tbtn--sm" id="shuffle" aria-pressed="false"><span class="px">Shuffle</span></button>
+        <button class="tbtn tbtn--sm" id="repeat" aria-label="Repetición desactivada"><span class="px" id="repeat-lbl">Repeat</span></button>
+      </div>
+
+      <div class="np__tools">
+        <button class="tbtn tbtn--sm fav" id="fav" aria-label="Añadir a favoritas" data-icon="heart"></button>
+        <button class="tbtn tbtn--sm" id="eq" aria-label="Ecualizador" data-icon="sliders"></button>
+        <button class="tbtn tbtn--sm" id="timer" aria-label="Temporizador de apagado" data-icon="timer"></button>
+        <button class="tbtn tbtn--sm" id="queue-btn" aria-label="Ver la cola" data-icon="queue"></button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="scrim" id="scrim"></div>
+<section class="sheet" id="sheet" role="dialog" aria-modal="true"></section>
+
+<div class="progress" id="prog" hidden>
+  <div class="progress__top">
+    <span class="progress__t">Importando</span>
+    <span class="progress__n" id="prog-n">0 / 0</span>
+  </div>
+  <div class="progress__bar"><div class="progress__fill" id="prog-fill"></div></div>
+  <div class="progress__f" id="prog-f"></div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<input type="file" id="file" multiple hidden
+       accept="audio/*,.mp3,.m4a,.m4b,.aac,.flac,.ogg,.oga,.opus,.wav,.aiff">
+
+<div id="splash">
+  <b>AXIOMA</b>
+  <span class="plate">Cargando biblioteca</span>
+</div>
+
+<script src="js/core.js"></script>
+<script src="js/player.js"></script>
+<script src="js/ui.js"></script>
+</body>
+</html>
