@@ -4,7 +4,7 @@
    La musica NO pasa por aqui: vive en IndexedDB, no en esta cache.
    Sube el numero de VERSION cada vez que cambies algun archivo.
    ============================================================ */
-const VERSION = 'axioma-v2';
+const VERSION = 'axioma-v3';
 
 const SHELL = [
   './',

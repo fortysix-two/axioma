@@ -159,8 +159,12 @@
 
 <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
-<input type="file" id="file" multiple hidden
-       accept="audio/*,.mp3,.m4a,.m4b,.aac,.flac,.ogg,.oga,.opus,.wav,.aiff">
+<!-- Sin atributo accept a propósito: en Android, cualquier filtro de tipo
+     hace que Chrome abra el selector de medios en vez del explorador de
+     archivos, y deja fuera Drive, Descargas y los WAV. El filtrado real
+     de audio lo hace importFiles() al recibir la selección. -->
+<input type="file" id="file" multiple hidden>
+<input type="file" id="folder" multiple hidden webkitdirectory directory>
 
 <div id="splash">
   <b>AXIOMA</b>
