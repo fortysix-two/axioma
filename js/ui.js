@@ -10,7 +10,7 @@ window.Axioma = window.Axioma || {};
   const P = Axioma.player;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
-  const APP_VERSION = '1.1';
+  const APP_VERSION = '1.2';
 
   /* ------------------------------------------------------------
      Iconografia. El transporte usa las figuras macizas clasicas;
@@ -278,7 +278,9 @@ window.Axioma = window.Axioma || {};
         <div class="meter__legend"><span>${tracks.length} pistas · ${U.bytes(size)}</span><span>${quota ? U.bytes(used) + ' / ' + U.bytes(quota) : 'sin límite conocido'}</span></div>
       </div>
       <button class="opt" data-act="import">${ic('eject')}
-        <span class="opt__txt"><span class="opt__t">Importar música</span><span class="opt__s">Archivos MP3, M4A, FLAC, OGG, Opus o WAV</span></span></button>
+        <span class="opt__txt"><span class="opt__t">Importar archivos</span><span class="opt__s">MP3, M4A, FLAC, OGG, Opus o WAV. Se abre el explorador del teléfono, así que también sirve Drive o Descargas.</span></span></button>
+      <button class="opt" data-act="import-folder">${ic('folder')}
+        <span class="opt__txt"><span class="opt__t">Importar una carpeta</span><span class="opt__s">Toma de golpe todos los audios que haya dentro. Si tu teléfono no permite elegir carpetas, usa la opción de arriba.</span></span></button>
       <button class="opt" data-act="persist" ${persisted ? 'disabled' : ''}>${ic('check')}
         <span class="opt__txt"><span class="opt__t">Proteger biblioteca</span><span class="opt__s">${persisted ? 'Activo. El sistema no borrará tu música para liberar espacio.' : 'Pide al sistema que no borre tu música si el teléfono se queda sin espacio.'}</span></span></button>
     </div>`;
@@ -314,6 +316,8 @@ window.Axioma = window.Axioma || {};
       <div class="opt">${ic('info')}
         <span class="opt__txt"><span class="opt__t">Axioma ${APP_VERSION}</span>
         <span class="opt__s">Reproductor local. Tu música nunca sale del teléfono: no hay cuentas, ni servidores, ni anuncios.</span></span></div>
+      <button class="opt" data-act="update">${ic('repeat')}
+        <span class="opt__txt"><span class="opt__t">Buscar actualización</span><span class="opt__s">Trae la última versión publicada y reinicia la app. Tu música y tus listas no se tocan.</span></span></button>
       ${installPrompt ? `<button class="opt" data-act="install">${ic('down_tray')}<span class="opt__txt"><span class="opt__t">Instalar en el teléfono</span><span class="opt__s">Añade Axioma al cajón de aplicaciones</span></span></button>` : ''}
     </div></div>`;
 
@@ -684,13 +688,20 @@ window.Axioma = window.Axioma || {};
   /* ------------------------------------------------------------
      Importacion de archivos
      ------------------------------------------------------------ */
-  const AUDIO_RE = /\.(mp3|m4a|m4b|aac|flac|ogg|oga|opus|wav|wma|aiff?)$/i;
+  /* WMA queda fuera a propósito: Chrome en Android no lo decodifica,
+     así que importarlo solo dejaría pistas mudas en la biblioteca. */
+  const AUDIO_RE = /\.(mp3|m4a|m4b|aac|flac|ogg|oga|opus|wav|wave|aiff?)$/i;
   let importing = false;
 
   async function importFiles(fileList) {
     if (importing) { toast('Ya hay una importación en curso'); return; }
-    const files = Array.from(fileList).filter((f) => (f.type && f.type.startsWith('audio/')) || AUDIO_RE.test(f.name));
-    if (!files.length) { toast('No encontré archivos de audio ahí'); return; }
+    const all = Array.from(fileList);
+    const files = all.filter((f) => (f.type && f.type.startsWith('audio/')) || AUDIO_RE.test(f.name));
+    if (!files.length) {
+      /* Decimos qué llegó: ayuda cuando el explorador entrega nombres raros. */
+      toast(all.length ? `Sin audio reconocible. Llegó «${all[0].name}»` : 'No seleccionaste nada');
+      return;
+    }
 
     importing = true;
     el.prog.hidden = false;
@@ -1077,6 +1088,7 @@ window.Axioma = window.Axioma || {};
       toast('Sonando en aleatorio');
     };
     el.file.onchange = () => { const f = el.file.files; el.file.value = ''; importFiles(f); };
+    el.folder.onchange = () => { const f = el.folder.files; el.folder.value = ''; importFiles(f); };
     el.q.addEventListener('input', U.debounce(renderSearch, 140));
 
     /* Reproductor compacto */
@@ -1125,6 +1137,7 @@ window.Axioma = window.Axioma || {};
   async function doAction(name) {
     switch (name) {
       case 'import': el.file.click(); break;
+      case 'import-folder': el.folder.click(); break;
       case 'new-playlist': newPlaylist(null); break;
       case 'play-list': {
         const list = el.vDetalle._list || [];
@@ -1180,6 +1193,21 @@ window.Axioma = window.Axioma || {};
         confirmSheet('Borrar biblioteca', `Se eliminarán las ${tracks.length} pistas guardadas y todas tus listas. Los archivos originales de tu computadora no se tocan.`,
           'Borrar todo', true, wipe);
         break;
+      case 'update': {
+        /* Vaciamos la caché de la app y recargamos. IndexedDB, donde vive
+           la música, no se toca: solo se tira lo descargado del servidor. */
+        toast('Buscando actualización...');
+        try {
+          if ('serviceWorker' in navigator) {
+            const regs = await navigator.serviceWorker.getRegistrations();
+            await Promise.all(regs.map((r) => r.update().catch(() => {})));
+          }
+          const keys = await caches.keys();
+          await Promise.all(keys.map((k) => caches.delete(k)));
+        } catch (e) { /* recargar suele bastar igualmente */ }
+        location.reload();
+        break;
+      }
       case 'install':
         if (!installPrompt) return;
         installPrompt.prompt();
@@ -1223,7 +1251,7 @@ window.Axioma = window.Axioma || {};
     Object.assign(el, {
       scroll: $('#scroll'), seg: $('#seg'), searchbar: $('#searchbar'), q: $('#q'),
       crumb: $('#crumb'), back: $('#back'), importBtn: $('#import'), shuffleAll: $('#shuffle-all'),
-      topActions: $('#top-actions'), file: $('#file'),
+      topActions: $('#top-actions'), file: $('#file'), folder: $('#folder'),
       vBiblioteca: $('[data-view="biblioteca"]'), vBuscar: $('[data-view="buscar"]'),
       vListas: $('[data-view="listas"]'), vAjustes: $('[data-view="ajustes"]'), vDetalle: $('[data-view="detalle"]'),
 
