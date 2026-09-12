@@ -4,7 +4,7 @@
    La musica NO pasa por aqui: vive en IndexedDB, no en esta cache.
    Sube el numero de VERSION cada vez que cambies algun archivo.
    ============================================================ */
-const VERSION = 'axioma-v3';
+const VERSION = 'axioma-v4';
 
 const SHELL = [
   './',
@@ -44,32 +44,39 @@ self.addEventListener('activate', (e) => {
   );
 });
 
+/* Espera acotada: si la red no responde pronto, tiramos de cache. */
+function conLimite(promesa, ms) {
+  return new Promise((res, rej) => {
+    const t = setTimeout(() => rej(new Error('timeout')), ms);
+    promesa.then(
+      (v) => { clearTimeout(t); res(v); },
+      (e) => { clearTimeout(t); rej(e); }
+    );
+  });
+}
+
 self.addEventListener('fetch', (e) => {
   const req = e.request;
   if (req.method !== 'GET') return;
   const url = new URL(req.url);
   if (url.origin !== self.location.origin) return;
 
-  e.respondWith(
-    caches.match(req, { ignoreSearch: true }).then((hit) => {
-      if (hit) {
-        /* Servimos lo cacheado al instante y refrescamos por detras. */
-        e.waitUntil(
-          fetch(req).then((res) => {
-            if (res && res.ok) return caches.open(VERSION).then((c) => c.put(req, res));
-          }).catch(() => {})
-        );
-        return hit;
-      }
-      return fetch(req)
-        .then((res) => {
-          if (res && res.ok && res.type === 'basic') {
-            const copy = res.clone();
-            caches.open(VERSION).then((c) => c.put(req, copy));
-          }
-          return res;
-        })
-        .catch(() => caches.match('index.html'));
-    })
-  );
+  /* Red primero, cache como respaldo.
+     Con conexion, una version nueva del servidor entra en cuanto abres la
+     app, sin trucos ni segundas aperturas. Sin conexion, fetch falla al
+     instante y se sirve lo guardado, asi que el modo avion sigue igual
+     de rapido. La musica no pasa por aqui: vive en IndexedDB. */
+  e.respondWith((async () => {
+    const cache = await caches.open(VERSION);
+    try {
+      const fresca = await conLimite(fetch(req), 3000);
+      if (fresca && fresca.ok && fresca.type === 'basic') cache.put(req, fresca.clone());
+      return fresca;
+    } catch (err) {
+      const guardada = await cache.match(req, { ignoreSearch: true });
+      if (guardada) return guardada;
+      const shell = await cache.match('index.html');
+      return shell || Response.error();
+    }
+  })());
 });
