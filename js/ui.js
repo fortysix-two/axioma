@@ -10,7 +10,7 @@ window.Axioma = window.Axioma || {};
   const P = Axioma.player;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
-  const APP_VERSION = '1.3';
+  const APP_VERSION = '1.5';
 
   /* ------------------------------------------------------------
      Iconografia. El transporte usa las figuras macizas clasicas;
@@ -34,6 +34,7 @@ window.Axioma = window.Axioma || {};
     x: '<path d="M6 6l12 12M18 6L6 18"/>',
     disc: '<circle cx="12" cy="12" r="8.5"/><circle cx="12" cy="12" r="2.2"/>',
     mic: '<rect x="9" y="2.8" width="6" height="11" rx="3"/><path d="M5.5 11.5a6.5 6.5 0 0013 0M12 18v3.2M8.6 21.2h6.8"/>',
+    karaoke: '<rect x="9.4" y="2.6" width="5.2" height="9.8" rx="2.6"/><path d="M6.1 10.8a5.9 5.9 0 0011.8 0M12 16.7v3.1M9.4 19.8h5.2"/><path d="M2.9 6.9v3.6M21.1 6.9v3.6"/>',
     folder: '<path d="M3.5 7.2A1.7 1.7 0 015.2 5.5h3.6l1.8 2.2h8.2a1.7 1.7 0 011.7 1.7v7.9a1.7 1.7 0 01-1.7 1.7H5.2a1.7 1.7 0 01-1.7-1.7z"/>',
     down_tray: '<path d="M12 3.5v11M7.8 10.6l4.2 4.2 4.2-4.2"/><path d="M4.5 17v2.2a1.3 1.3 0 001.3 1.3h12.4a1.3 1.3 0 001.3-1.3V17"/>',
     moon: '<path d="M20 14.2A8.2 8.2 0 019.8 4 8.5 8.5 0 1020 14.2z"/>',
@@ -845,6 +846,7 @@ window.Axioma = window.Axioma || {};
     el.npFmt.textContent = (t.fileName.split('.').pop() || '').toUpperCase();
 
     document.title = `${t.title} · ${t.artist} — Axioma`;
+    paintKaraoke();
     paintPlaying();
   }
 
@@ -885,6 +887,20 @@ window.Axioma = window.Axioma || {};
     el.npTime.textContent = clock;
     el.elapsed.textContent = U.time(t);
     el.remain.textContent = '-' + U.time(Math.max(0, (d || 0) - t));
+  }
+
+  /* La corredera de voz: porcentaje, indicador KAR en el LCD, y el aviso
+     de pista mono, donde el truco no puede funcionar porque no hay dos
+     canales que restar. */
+  function paintKaraoke() {
+    const pct = Math.round(P.voice * 100);
+    el.voice.value = pct;
+    el.voiceVal.textContent = pct + '%';
+    const activo = pct < 100;
+    el.npKar.hidden = !activo;
+    el.karaokeBtn.classList.toggle('on', activo);
+    const t = P.current;
+    el.karaokeNote.textContent = activo && t && t.channels === 1 ? 'pista mono' : '';
   }
 
   function paintFlags() {
@@ -1124,6 +1140,21 @@ window.Axioma = window.Axioma || {};
     el.timerBtn.onclick = sleepSheet;
     el.queueBtn.onclick = queueSheet;
     el.visOff.onclick = () => doAction('studio');
+
+    /* Karaoke: el panel se pliega bajo el transporte. Si el modo estudio
+       está apagado lo encendemos, porque sin cadena de audio no hay efecto
+       posible y dejar el botón muerto sería peor. */
+    el.karaokeBtn.onclick = () => {
+      if (!P.studio) {
+        if (!P.setStudio(true)) { toast('Tu navegador no permite procesar el audio'); return; }
+        Axioma.db.setting.set('studio', true);
+        toast('Modo estudio activado para el karaoke');
+        drawLoop();
+      }
+      el.karaokePanel.hidden = !el.karaokePanel.hidden;
+      paintKaraoke();
+    };
+    el.voice.oninput = () => { P.setVoice(+el.voice.value / 100); paintKaraoke(); };
     el.npMore.onclick = () => { if (P.current) trackMenu(P.current); };
     el.scrim.onclick = sheet.close;
 
@@ -1202,17 +1233,39 @@ window.Axioma = window.Axioma || {};
           'Borrar todo', true, wipe);
         break;
       case 'update': {
-        /* Vaciamos la caché de la app y recargamos. IndexedDB, donde vive
-           la música, no se toca: solo se tira lo descargado del servidor. */
+        /* Entre el teléfono y el servidor hay tres capas que guardan copias:
+           la caché HTTP del navegador, la del trabajador de servicio, y el
+           propio trabajador, que intercepta la recarga. Hay que desarmar las
+           tres o la versión nueva no entra nunca.
+           IndexedDB, donde vive la música, no se toca en ningún momento. */
+        if (!navigator.onLine) { toast('Necesitas conexión para actualizar'); break; }
         toast('Buscando actualización...');
+
+        const SHELL = ['index.html', 'styles.css', 'manifest.webmanifest',
+          'js/core.js', 'js/player.js', 'js/ui.js'];
         try {
+          /* 1. Releer del servidor saltándose la caché HTTP. Lo comprobamos
+             con un archivo primero: si el servidor no responde, abortamos
+             antes de tirar nada, para no dejar la app sin copia local. */
+          const prueba = await fetch('js/ui.js', { cache: 'reload' });
+          if (!prueba.ok) throw new Error('respuesta ' + prueba.status);
+          await Promise.all(SHELL.map((u) => fetch(u, { cache: 'reload' }).catch(() => {})));
+        } catch (e) {
+          toast('No se pudo contactar con el servidor');
+          break;
+        }
+
+        try { sessionStorage.setItem('axioma-upd', APP_VERSION); } catch (e) { /* sin aviso */ }
+        try {
+          /* 2. Quitar el trabajador para que no intercepte la recarga. */
           if ('serviceWorker' in navigator) {
             const regs = await navigator.serviceWorker.getRegistrations();
-            await Promise.all(regs.map((r) => r.update().catch(() => {})));
+            await Promise.all(regs.map((r) => r.unregister().catch(() => {})));
           }
+          /* 3. Vaciar lo guardado. Al arrancar se vuelve a registrar y a llenar. */
           const keys = await caches.keys();
           await Promise.all(keys.map((k) => caches.delete(k)));
-        } catch (e) { /* recargar suele bastar igualmente */ }
+        } catch (e) { /* recargamos igual */ }
         location.reload();
         break;
       }
@@ -1275,6 +1328,8 @@ window.Axioma = window.Axioma || {};
       play: $('#play'), pause: $('#pause'), stop: $('#stop'), nextBtn: $('#next'), prevBtn: $('#prev'), eject: $('#eject'),
       shuffle: $('#shuffle'), repeat: $('#repeat'), repeatLbl: $('#repeat-lbl'),
       fav: $('#fav'), eqBtn: $('#eq'), timerBtn: $('#timer'), queueBtn: $('#queue-btn'),
+      karaokeBtn: $('#karaoke-btn'), karaokePanel: $('#karaoke'), voice: $('#voice'),
+      voiceVal: $('#voice-val'), karaokeNote: $('#karaoke-note'), npKar: $('#np-kar'),
 
       sheet: $('#sheet'), scrim: $('#scrim'), toast: $('#toast'),
       prog: $('#prog'), progN: $('#prog-n'), progF: $('#prog-f'), progFill: $('#prog-fill'),
@@ -1319,11 +1374,27 @@ window.Axioma = window.Axioma || {};
 
     await P.restore(getTrack);
     paintFlags();
+    /* Si el karaoke quedó puesto de la sesión anterior, el panel aparece
+       abierto, para que se vea de dónde viene que la canción suene distinta. */
+    if (P.voice < 1) el.karaokePanel.hidden = false;
+    paintKaraoke();
     updateNow();
 
     goTab('biblioteca');
     const splash = $('#splash');
     if (splash) splash.remove();
+
+    /* Si venimos de pulsar "Buscar actualización", decimos en qué quedó.
+       Sin esto la recarga parece que no hizo nada. */
+    try {
+      const anterior = sessionStorage.getItem('axioma-upd');
+      if (anterior !== null) {
+        sessionStorage.removeItem('axioma-upd');
+        toast(anterior === APP_VERSION
+          ? `Ya tenías la última versión (${APP_VERSION})`
+          : `Actualizado a la versión ${APP_VERSION}`);
+      }
+    } catch (e) { /* sin sessionStorage no hay aviso */ }
 
     /* Trabajador de servicio: es lo que hace que la app abra sin conexion. */
     if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {

@@ -39,10 +39,77 @@ Axioma.player = (function () {
     'Fiesta':   [5, 5, 0, 0, 0, 0, 0, 0, 5, 5],
   };
   let ctx = null, srcNode = null, preNode = null, filters = [], analyser = null, spectrum = null;
+  let karaoke = null;
   let studio = false;
   let eqGains = EQ_FREQS.map(() => 0);
   let preamp = 0;
+  let voice = 1;              // 1 = voz intacta, 0 = voz fuera
   const db2gain = (db) => Math.pow(10, db / 20);
+
+  /* ------------------------------------------------------------
+     Etapa de karaoke: cancelacion de centro limitada en banda.
+
+     La voz suele ir mezclada justo en el centro, identica en los dos
+     canales. Separamos la señal en medio (L+R)/2 y lado (L-R)/2, y al
+     medio le restamos su propia banda de voz, de 200 Hz a 9 kHz. Asi el
+     grave y el aire de arriba se conservan, y el estereo de todo lo que
+     no este centrado sigue intacto porque el lado no se toca.
+
+     Con cantidad = 1 la resta vale cero y la señal sale idéntica: la
+     reconstruccion L = medio + lado, R = medio - lado es exacta.
+     ------------------------------------------------------------ */
+  function buildKaraoke(c) {
+    const input = c.createGain();
+    const splitter = c.createChannelSplitter(2);
+    input.connect(splitter);
+
+    const mitad = () => { const g = c.createGain(); g.gain.value = 0.5; return g; };
+
+    const mid = mitad();
+    splitter.connect(mid, 0);
+    splitter.connect(mid, 1);
+
+    const negR = c.createGain(); negR.gain.value = -1;
+    splitter.connect(negR, 1);
+    const side = mitad();
+    splitter.connect(side, 0);
+    negR.connect(side);
+
+    const hp = c.createBiquadFilter();
+    hp.type = 'highpass'; hp.frequency.value = 200; hp.Q.value = 0.707;
+    const lp = c.createBiquadFilter();
+    lp.type = 'lowpass'; lp.frequency.value = 9000; lp.Q.value = 0.707;
+    const kill = c.createGain(); kill.gain.value = 0;
+    mid.connect(hp); hp.connect(lp); lp.connect(kill);
+
+    const midOut = c.createGain();
+    mid.connect(midOut);
+    kill.connect(midOut);
+
+    const sideNeg = c.createGain(); sideNeg.gain.value = -1;
+    side.connect(sideNeg);
+
+    const merger = c.createChannelMerger(2);
+    midOut.connect(merger, 0, 0);
+    side.connect(merger, 0, 0);
+    midOut.connect(merger, 0, 1);
+    sideNeg.connect(merger, 0, 1);
+
+    const output = c.createGain();
+    merger.connect(output);
+
+    return {
+      input, output,
+      set(cantidad) { kill.gain.value = -(1 - cantidad); },
+    };
+  }
+
+  function setVoice(v) {
+    voice = Math.max(0, Math.min(1, v));
+    if (karaoke) karaoke.set(voice);
+    Axioma.db.setting.set('voice', voice);
+    emit('voice', voice);
+  }
 
   /* Suscriptores de la interfaz */
   const subs = {};
@@ -70,6 +137,10 @@ Axioma.player = (function () {
         node.connect(b);
         return (node = b);
       });
+      karaoke = buildKaraoke(ctx);
+      karaoke.set(voice);
+      node.connect(karaoke.input);
+      node = karaoke.output;
       analyser = ctx.createAnalyser();
       analyser.fftSize = 128;
       analyser.smoothingTimeConstant = 0.72;
@@ -101,6 +172,7 @@ Axioma.player = (function () {
         srcNode.disconnect();
         if (preNode) preNode.disconnect();
         filters.forEach((f) => f.disconnect());
+        if (karaoke) karaoke.output.disconnect();
         if (analyser) analyser.disconnect();
         srcNode.connect(ctx.destination);
       } catch (e) { /* nada que puentear */ }
@@ -115,10 +187,12 @@ Axioma.player = (function () {
       srcNode.disconnect();
       if (preNode) preNode.disconnect();
       filters.forEach((f) => f.disconnect());
+      if (karaoke) karaoke.output.disconnect();
       if (analyser) analyser.disconnect();
       let node = srcNode;
       if (preNode) { srcNode.connect(preNode); node = preNode; }
       filters.forEach((f) => { node.connect(f); node = f; });
+      if (karaoke) { node.connect(karaoke.input); node = karaoke.output; }
       node.connect(analyser);
       analyser.connect(ctx.destination);
     } catch (e) { /* ya conectado */ }
@@ -374,15 +448,18 @@ Axioma.player = (function () {
   }
 
   async function restore(byId) {
-    const [saved, f, eq, pre] = await Promise.all([
+    const [saved, f, eq, pre, voz] = await Promise.all([
       Axioma.db.setting.get('resume', null),
       Axioma.db.setting.get('flags', null),
       Axioma.db.setting.get('eq', null),
       Axioma.db.setting.get('preamp', 0),
+      Axioma.db.setting.get('voice', 1),
     ]);
     if (f) { shuffle = !!f.shuffle; repeat = f.repeat || 'off'; }
     if (eq && eq.length === EQ_FREQS.length) eqGains = eq.slice();
     preamp = +pre || 0;
+    voice = typeof voz === 'number' ? Math.max(0, Math.min(1, voz)) : 1;
+    if (karaoke) karaoke.set(voice);
     emit('flags', flags());
     if (!saved || !saved.trackId) return false;
     const q = (saved.queueIds || []).map(byId).filter(Boolean);
@@ -472,7 +549,7 @@ Axioma.player = (function () {
     audio, on, load, play, pause, toggle, next, prev, jump, seek,
     setQueue, playNext, enqueue, removeFromQueue, dropTracks,
     setShuffle, setRepeat, cycleRepeat, flags,
-    setStudio, setEq, setEqAll, setPreamp, levels, reconnectGraph,
+    setStudio, setEq, setEqAll, setPreamp, setVoice, levels, reconnectGraph,
     setSleep, sleepLeft, restore, save,
     get current() { return current; },
     get queue() { return queue; },
@@ -480,6 +557,7 @@ Axioma.player = (function () {
     get playing() { return !audio.paused && ready; },
     get eq() { return eqGains.slice(); },
     get preamp() { return preamp; },
+    get voice() { return voice; },
     get studio() { return studio; },
     get coverUrl() { return coverUrl; },
     EQ_FREQS, EQ_LABELS, PRESETS,
