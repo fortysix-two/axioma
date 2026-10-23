@@ -107,6 +107,7 @@
         <span><b id="np-kbps">--</b> kbps</span>
         <span><b id="np-khz">--</b> kHz</span>
         <span id="np-ch">stereo</span>
+        <span id="np-kar" hidden>kar</span>
         <span id="np-fmt" style="margin-left:auto"></span>
       </div>
     </div>
@@ -130,6 +131,22 @@
         <button class="tbtn" id="eject" aria-label="Importar música" data-icon="eject"></button>
       </div>
 
+      <!-- Corredera de voz, plegable. Donde los equipos de karaoke
+           de verdad ponían su mando de atenuación vocal. -->
+      <div class="karaoke" id="karaoke" hidden>
+        <div class="karaoke__row">
+          <span class="plate">Voz</span>
+          <input type="range" id="voice" min="0" max="100" step="1" value="100"
+                 aria-label="Nivel de voz">
+          <span class="karaoke__val" id="voice-val">100%</span>
+        </div>
+        <div class="karaoke__scale">
+          <span class="plate">Karaoke</span>
+          <span class="plate" id="karaoke-note"></span>
+          <span class="plate">Normal</span>
+        </div>
+      </div>
+
       <div class="np__tools">
         <button class="tbtn tbtn--sm" id="shuffle" aria-pressed="false"><span class="px">Shuffle</span></button>
         <button class="tbtn tbtn--sm" id="repeat" aria-label="Repetición desactivada"><span class="px" id="repeat-lbl">Repeat</span></button>
@@ -137,6 +154,7 @@
 
       <div class="np__tools">
         <button class="tbtn tbtn--sm fav" id="fav" aria-label="Añadir a favoritas" data-icon="heart"></button>
+        <button class="tbtn tbtn--sm" id="karaoke-btn" aria-label="Modo karaoke" data-icon="karaoke"></button>
         <button class="tbtn tbtn--sm" id="eq" aria-label="Ecualizador" data-icon="sliders"></button>
         <button class="tbtn tbtn--sm" id="timer" aria-label="Temporizador de apagado" data-icon="timer"></button>
         <button class="tbtn tbtn--sm" id="queue-btn" aria-label="Ver la cola" data-icon="queue"></button>

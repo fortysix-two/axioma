@@ -498,6 +498,41 @@ button{background:none;border:0;padding:0;cursor:pointer}
 .np__transport{display:flex;align-items:center;justify-content:space-between;gap:4px;padding:5px 4px}
 .np__transport .tbtn{flex:1;height:42px}
 .np__transport .tbtn svg{width:19px;height:19px}
+/* ---------- corredera de voz (karaoke) ---------- */
+.karaoke{
+  margin:0 4px 5px;padding:7px 10px 6px;background:var(--lcd-bg);
+  box-shadow:inset 1px 1px 0 var(--lo),inset -1px -1px 0 var(--hi),0 0 0 1px var(--lo);
+  display:flex;flex-direction:column;gap:4px;
+}
+.karaoke__row{display:flex;align-items:center;gap:10px}
+.karaoke__row .plate{flex:none;color:var(--lcd-2)}
+.karaoke__val{
+  flex:none;font-family:var(--px);font-size:10px;color:var(--lcd);
+  font-variant-numeric:tabular-nums;min-width:40px;text-align:right;
+}
+.karaoke input[type=range]{
+  -webkit-appearance:none;appearance:none;flex:1;min-width:0;height:22px;background:none;
+}
+.karaoke input[type=range]::-webkit-slider-runnable-track{
+  height:9px;background:linear-gradient(90deg,var(--eq-lo),var(--eq-hi));
+  box-shadow:inset 1px 1px 0 rgba(0,0,0,.6);
+}
+.karaoke input[type=range]::-moz-range-track{
+  height:9px;background:linear-gradient(90deg,var(--eq-lo),var(--eq-hi));
+}
+.karaoke input[type=range]::-webkit-slider-thumb{
+  -webkit-appearance:none;width:12px;height:22px;background:var(--win);margin-top:-6px;
+  box-shadow:inset 1px 1px 0 var(--hi),inset -1px -1px 0 var(--lo),0 0 0 1px var(--lo);
+}
+.karaoke input[type=range]::-moz-range-thumb{
+  width:12px;height:22px;border:0;background:var(--win);
+  box-shadow:inset 1px 1px 0 var(--hi),inset -1px -1px 0 var(--lo),0 0 0 1px var(--lo);
+}
+.karaoke__scale{display:flex;justify-content:space-between;gap:8px;align-items:baseline}
+.karaoke__scale .plate{color:var(--lcd-3)}
+#karaoke-note{flex:1;text-align:center;color:var(--alert);letter-spacing:.08em}
+#np-kar{color:var(--lcd)}
+
 .np__tools{display:flex;align-items:center;gap:4px;padding:0 4px 5px}
 .np__tools .tbtn--sm{flex:1;height:32px}
 .np__tools .fav.on{color:var(--alert)}
