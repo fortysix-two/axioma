@@ -10,7 +10,7 @@ window.Axioma = window.Axioma || {};
   const P = Axioma.player;
   const $ = (s, r) => (r || document).querySelector(s);
   const $$ = (s, r) => Array.from((r || document).querySelectorAll(s));
-  const APP_VERSION = '1.2';
+  const APP_VERSION = '1.3';
 
   /* ------------------------------------------------------------
      Iconografia. El transporte usa las figuras macizas clasicas;
@@ -1087,8 +1087,16 @@ window.Axioma = window.Axioma || {};
       P.setQueue(U.shuffled(tracks), 0, true);
       toast('Sonando en aleatorio');
     };
-    el.file.onchange = () => { const f = el.file.files; el.file.value = ''; importFiles(f); };
-    el.folder.onchange = () => { const f = el.folder.files; el.folder.value = ''; importFiles(f); };
+    /* Ojo: input.files es una lista viva. Hay que copiarla a un array ANTES
+       de limpiar el campo, porque value = '' vacía esa misma lista y la
+       importación se quedaría sin archivos. */
+    const recoger = (input) => () => {
+      const archivos = Array.from(input.files);
+      input.value = '';
+      importFiles(archivos);
+    };
+    el.file.onchange = recoger(el.file);
+    el.folder.onchange = recoger(el.folder);
     el.q.addEventListener('input', U.debounce(renderSearch, 140));
 
     /* Reproductor compacto */
